@@ -199,6 +199,9 @@ ModelState::PrintModelConfig()
 TRITONSERVER_Error*
 ModelState::ReadModel(const std::string& artifact_name, std::string* model_path)
 {
+
+  LOG_MESSAGE(TRITONSERVER_LOG_INFO,(std::string("READING MODEL:")+ artifact_name).c_str());
+
   RETURN_ERROR_IF_FALSE(
       ModelNotRead(), TRITONSERVER_ERROR_INTERNAL,
       std::string("attempt to read model at '") + *model_path +
@@ -223,10 +226,11 @@ ModelState::ReadModel(const std::string& artifact_name, std::string* model_path)
         std::string("unable to find '") + *model_path + "' for model '" +
             Name() + "'");
   }
-
+  LOG_MESSAGE(TRITONSERVER_LOG_INFO,(std::string("READING MODEL from:")+ *model_path).c_str());
   RETURN_IF_OPENVINO_ASSIGN_ERROR(
       ov_model_, ov_core_.read_model(*model_path), "reading model");
 
+  LOG_MESSAGE(TRITONSERVER_LOG_INFO,(std::string("Model read:")).c_str());
   model_read_ = true;
   return nullptr;  // success
 }
@@ -425,6 +429,7 @@ TRITONSERVER_Error*
 ModelState::LoadModel(
     const std::string& device, const std::pair<std::string, ov::Any>& property)
 {
+  LOG_MESSAGE(TRITONSERVER_LOG_INFO,(std::string("Load model on device:") + device).c_str());
   RETURN_ERROR_IF_FALSE(
       ModelNotLoaded(device), TRITONSERVER_ERROR_INTERNAL,
       std::string("attempt to load model '") + Name() + "' on device '" +
@@ -537,9 +542,9 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
            io_name + "' for model '" + Name() + "'")
               .c_str());
     }
-    RETURN_IF_OPENVINO_ERROR(
-        ppp.input(io_name).tensor().set_element_type(openvino_element),
-        std::string("setting precision for " + io_name).c_str());
+   // RETURN_IF_OPENVINO_ERROR(
+   //     ppp.input(io_name).tensor().set_element_type(openvino_element),
+   //     std::string("setting precision for " + io_name).c_str());
 
     // If a reshape is provided for the input then use that when
     // validating that the model matches what is expected.
@@ -551,10 +556,11 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
       RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
     }
 
-    ov::Shape input_shape;
+    ov::PartialShape input_shape;
+
     RETURN_IF_OPENVINO_ASSIGN_ERROR(
         input_shape,
-        model_inputs[model_inputs_name_to_index[io_name]].get_shape(),
+        model_inputs[model_inputs_name_to_index[io_name]].get_partial_shape(),
         ("retrieving original shapes from input " + io_name).c_str());
 
     if (reshape_io_layers_) {
@@ -566,28 +572,28 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
           ppp.input(io_name).tensor().set_shape(input_shape),
           std::string("setting shape for " + io_name).c_str());
     } else {
-      RETURN_IF_ERROR(CompareDimsSupported(
-          Name(), io_name,
-          std::vector<size_t>(input_shape.begin(), input_shape.end()), dims,
-          MaxBatchSize(), false /* compare_exact */));
+//      RETURN_IF_ERROR(CompareDimsSupported(
+//          Name(), io_name,
+//          std::vector<size_t>(input_shape.begin(), input_shape.end()), dims,
+//          MaxBatchSize(), false /* compare_exact */));
     }
 
-    if (MaxBatchSize()) {
-      RETURN_IF_OPENVINO_ERROR(
-          ppp.input(io_name).tensor().set_layout("N..."),
-          std::string("setting layout for " + io_name).c_str());
-    }
-  }
+ //   if (MaxBatchSize()) {
+ //     RETURN_IF_OPENVINO_ERROR(
+ //         ppp.input(io_name).tensor().set_layout("N..."),
+ //         std::string("setting layout for " + io_name).c_str());
+  //  }
+ }
 
   // Model preprocessing
-  RETURN_IF_OPENVINO_ASSIGN_ERROR(
-      ov_model_, ppp.build(), "apply model input preprocessing");
+//  RETURN_IF_OPENVINO_ASSIGN_ERROR(
+//      ov_model_, ppp.build(), "apply model input preprocessing");
 
   // Configuring the model to handle the max_batch_size
-  if (MaxBatchSize()) {
-    RETURN_IF_OPENVINO_ERROR(
-        ov::set_batch(ov_model_, MaxBatchSize()), "setting max batch size");
-  }
+//  if (MaxBatchSize()) {
+//   RETURN_IF_OPENVINO_ERROR(
+ //       ov::set_batch(ov_model_, MaxBatchSize()), "setting max batch size");
+//  }
 
   return nullptr;  // success
 }
@@ -643,15 +649,15 @@ ModelState::ValidateOutputs()
     } else {
       RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
     }
-    ov::Shape output_shape;
+    ov::PartialShape output_shape;
     RETURN_IF_OPENVINO_ASSIGN_ERROR(
         output_shape,
-        model_outputs[model_outputs_name_to_index[io_name]].get_shape(),
+        model_outputs[model_outputs_name_to_index[io_name]].get_partial_shape(),
         ("retrieving original shapes from output " + io_name).c_str());
-    RETURN_IF_ERROR(CompareDimsSupported(
-        Name(), io_name,
-        std::vector<size_t>(output_shape.begin(), output_shape.end()), dims,
-        MaxBatchSize(), true /* compare_exact */));
+  //  RETURN_IF_ERROR(CompareDimsSupported(
+  //      Name(), io_name,
+  //      std::vector<size_t>(output_shape.begin(), output_shape.end()), dims,
+  //      MaxBatchSize(), true /* compare_exact */));
   }
 
   // Model preprocessing
@@ -810,9 +816,9 @@ ModelState::AutoCompleteInputOrOutput(
           "data_type",
           OpenVINOElementToModelConfigDataType(ov_io.get_element_type())));
       // Find shape
-      ov::Shape io_shape;
+      ov::PartialShape io_shape;
       RETURN_IF_OPENVINO_ASSIGN_ERROR(
-          io_shape, ov_io.get_shape(),
+          io_shape, ov_io.get_partial_shape(),
           ("retrieving original shapes from" + std::string(io_json_obj_name) +
            " " + io_name)
               .c_str());
@@ -820,7 +826,11 @@ ModelState::AutoCompleteInputOrOutput(
       triton::common::TritonJson::Value dims(
           ModelConfig(), triton::common::TritonJson::ValueType::ARRAY);
       for (size_t i = (MaxBatchSize() > 0) ? 1 : 0; i < io_shape.size(); i++) {
-        RETURN_IF_ERROR(dims.AppendInt(io_shape[i]));
+        if (io_shape[i].is_dynamic()){
+          RETURN_IF_ERROR(dims.AppendInt(-1));
+        }else{
+          RETURN_IF_ERROR(dims.AppendInt(io_shape[i].get_length()));
+        }
       }
       RETURN_IF_ERROR(io_json.Add("dims", std::move(dims)));
       // Add individual input/output to new input/output

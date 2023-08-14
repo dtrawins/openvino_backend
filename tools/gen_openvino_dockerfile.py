@@ -92,16 +92,10 @@ WORKDIR /workspace/openvino/build
 RUN /bin/bash -c 'cmake \
         -DCMAKE_BUILD_TYPE=${OPENVINO_BUILD_TYPE} \
         -DCMAKE_INSTALL_PREFIX=/workspace/install \
-        -DENABLE_VPU=OFF \
-        -DENABLE_CLDNN=OFF \
         -DTHREADING=OMP \
-        -DENABLE_GNA=OFF \
-        -DENABLE_DLIA=OFF \
         -DENABLE_TESTS=OFF \
         -DENABLE_INTEL_MYRIAD=OFF \
         -DENABLE_VALIDATION_SET=OFF \
-        -DNGRAPH_ONNX_IMPORT_ENABLE=OFF \
-        -DNGRAPH_DEPRECATED_ENABLE=FALSE \
         .. && \
     make -j$(nproc) install'
 
@@ -112,18 +106,7 @@ RUN mkdir -p include && \
     cp -r /workspace/install/runtime/include/openvino include/.
 RUN mkdir -p lib && \
     cp /workspace/install/runtime/lib/intel64/libiomp5.so lib/. && \
-    cp /workspace/install/runtime/lib/intel64/libopenvino.so.${OPENVINO_VERSION} lib/. && \
-    cp /workspace/install/runtime/lib/intel64/libopenvino_c.so.${OPENVINO_VERSION} lib/. && \
-    cp /workspace/install/runtime/lib/intel64/libopenvino_intel_cpu_plugin.so lib/. && \
-    cp /workspace/install/runtime/lib/intel64/libopenvino_ir_frontend.so.${OPENVINO_VERSION} lib/.
-RUN OV_SHORT_VERSION=`echo ${OPENVINO_VERSION} | awk '{ split($0,a,"."); print substr(a[1],3) a[2] a[3] }'` && \
-    (cd lib && \
-        ln -s libopenvino.so.${OPENVINO_VERSION} libopenvino.so.${OV_SHORT_VERSION} && \
-        ln -s libopenvino.so.${OPENVINO_VERSION} libopenvino.so && \
-        ln -s libopenvino_c.so.${OPENVINO_VERSION} libopenvino_c.so.${OV_SHORT_VERSION} && \
-        ln -s libopenvino_c.so.${OPENVINO_VERSION} libopenvino_c.so && \
-        ln -s libopenvino_ir_frontend.so.${OPENVINO_VERSION} libopenvino_ir_frontend.so.${OV_SHORT_VERSION} && \
-        ln -s libopenvino_ir_frontend.so.${OPENVINO_VERSION} libopenvino_ir_frontend.so)
+    cp -P /workspace/install/runtime/lib/intel64/libopenvino*.so* lib/. \
 """
 
     df += """

@@ -198,20 +198,20 @@ OpenVINOElementToModelConfigDataType(const ov::element::Type& data_type)
 TRITONSERVER_Error*
 CompareDimsSupported(
     const std::string& model_name, const std::string& tensor_name,
-    const std::vector<size_t>& model_shape, const std::vector<int64_t>& dims,
+    const std::vector<ov::Dimension>& model_shape, const std::vector<int64_t>& dims,
     const int max_batch_size, const bool compare_exact)
 {
   // TODO: OpenVINO backend does not support the dynamic shapes as of now.
   // We can use RESIZE_BILINEAR preProcess in InputInfo to support dynamic
   // shapes in future.
-  for (const auto& dim : dims) {
-    RETURN_ERROR_IF_TRUE(
-        (dim == -1), TRITONSERVER_ERROR_INVALID_ARG,
-        std::string("model '") + model_name + "', tensor '" + tensor_name +
-            "': provides -1 dim (shape " + ShapeToString(dims) +
-            "), openvino "
-            "currently does not support dynamic shapes.");
-  }
+ // for (const auto& dim : dims) {
+ //   RETURN_ERROR_IF_TRUE(
+ //       (dim == -1), TRITONSERVER_ERROR_INVALID_ARG,
+ //       std::string("model '") + model_name + "', tensor '" + tensor_name +
+ //           "': provides -1 dim (shape " + ShapeToString(dims) +
+ //           "), openvino "
+ //           "currently does not support dynamic shapes.");
+ // }
 
   // If the model configuration expects batching support in the model,
   // then the openvino first dimension will be reshaped hence should not
@@ -232,7 +232,12 @@ CompareDimsSupported(
     bool succ = (model_shape.size() == (size_t)full_dims.size());
     if (succ) {
       for (size_t i = 0; i < full_dims.size(); ++i) {
-        const int64_t model_dim = model_shape[i];
+        int64_t model_dim;
+        if (model_shape[i].is_dynamic()){
+          model_dim = -1;
+        } else {
+          model_dim = model_shape[i].get_length();
+        }
         if (compare_exact || (i != 0)) {
           succ &= (model_dim == full_dims[i]);
         }
@@ -242,10 +247,8 @@ CompareDimsSupported(
     RETURN_ERROR_IF_TRUE(
         !succ, TRITONSERVER_ERROR_INVALID_ARG,
         std::string("model '") + model_name + "', tensor '" + tensor_name +
-            "': the model expects " + std::to_string(model_shape.size()) +
-            " dimensions (shape " +
-            ShapeToString(ConvertToSignedShape(model_shape)) +
-            ") but the model configuration specifies " +
+            "': the model expects ... " +
+            " but the model configuration specifies " +
             std::to_string(full_dims.size()) +
             " dimensions (an initial batch dimension because max_batch_size "
             "> 0 followed by the explicit tensor shape, making complete "
@@ -256,7 +259,12 @@ CompareDimsSupported(
     bool succ = (model_shape.size() == dims.size());
     if (succ) {
       for (size_t i = 0; i < dims.size(); ++i) {
-        const int64_t model_dim = model_shape[i];
+        int64_t model_dim;
+        if (model_shape[i].is_dynamic()){
+          model_dim = -1;
+        } else {
+          model_dim = model_shape[i].get_length();
+        }
         succ &= (model_dim == dims[i]);
       }
     }
@@ -264,9 +272,8 @@ CompareDimsSupported(
     RETURN_ERROR_IF_TRUE(
         !succ, TRITONSERVER_ERROR_INVALID_ARG,
         std::string("model '") + model_name + "', tensor '" + tensor_name +
-            "': the model expects " + std::to_string(model_shape.size()) +
+            "': the model expects " +
             " dimensions (shape " +
-            ShapeToString(ConvertToSignedShape(model_shape)) +
             ") but the model configuration specifies " +
             std::to_string(dims.size()) + " dimensions (shape " +
             ShapeToString(dims) + ")");
